@@ -140,7 +140,7 @@ private:
 
     enum class Constraint { None, Weak, Strong };
     /// @brief All pins which had their value changed and need to propagate updates
-    std::queue<std::pair<const Pin*, Constraint>> updating_pins;
+    std::queue<std::tuple<const Pin*, Constraint, const Node*>> updating_pins;
 
     unsigned int somersloop_texture_id;
 
