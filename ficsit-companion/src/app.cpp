@@ -551,6 +551,7 @@ void App::UpdateNodesRate()
                 p->current_rate = new_rate;
                 if (p->link != nullptr)
                 {
+                    updated_pins[p.get()] = Constraint::Strong;
                     updating_pins.push({ p.get(), Constraint::Strong });
                 }
             }
@@ -584,9 +585,11 @@ void App::UpdateNodesRate()
                     {
                         one_pin[0]->current_rate = new_rate;
                         const Constraint other_constraint = GetConstraint(other_output_pin);
+                        auto new_constraint = (updating_constraint == Constraint::Strong && other_constraint == Constraint::Strong) ? Constraint::Strong : Constraint::Weak;
+                        updated_pins[one_pin[0].get()] = new_constraint;
                         updating_pins.push({
                             one_pin[0].get(),
-                            (updating_constraint == Constraint::Strong && other_constraint == Constraint::Strong) ? Constraint::Strong : Constraint::Weak
+                            new_constraint
                         });
                     }
                 }
@@ -612,9 +615,11 @@ void App::UpdateNodesRate()
                         // If it's linked, propagate the update
                         if (other_pin->link != nullptr)
                         {
+                            auto new_constraint = updating_constraint == Constraint::Strong ? Constraint::Strong : Constraint::Weak;
+                            updated_pins[other_pin] = new_constraint;
                             updating_pins.push({
                                 other_pin,
-                                updating_constraint == Constraint::Strong ? Constraint::Strong : Constraint::Weak
+                                new_constraint
                                 });
                         }
                     }
@@ -644,9 +649,11 @@ void App::UpdateNodesRate()
                         if (multi_pin[other_idx]->link != nullptr)
                         {
                             const Constraint stronger_constraint = constraint_0 > constraint_1 ? constraint_0 : constraint_1;
+                            auto new_constraint = updating_constraint == Constraint::Strong && stronger_constraint == Constraint::Strong ? Constraint::Strong : Constraint::Weak;
+                            updated_pins[multi_pin[other_idx].get()] = new_constraint;
                             updating_pins.push({
                                 multi_pin[other_idx].get(),
-                                updating_constraint == Constraint::Strong && stronger_constraint == Constraint::Strong ? Constraint::Strong : Constraint::Weak
+                                new_constraint
                                 });
                         }
                     }
@@ -661,6 +668,7 @@ void App::UpdateNodesRate()
                         if (multi_pin[i]->current_rate != new_rate)
                         {
                             multi_pin[i]->current_rate = new_rate;
+                            updated_pins[multi_pin[i].get()] = Constraint::Weak;
                             updating_pins.push({ multi_pin[i].get(), Constraint::Weak });
                         }
                     }
@@ -694,6 +702,7 @@ void App::UpdateNodesRate()
         // If here, copy rate and schedule this pin to trigger updates too
         updating_pin->link->flow = updating_pin->direction == ax::NodeEditor::PinKind::Input ? ax::NodeEditor::FlowDirection::Backward : ax::NodeEditor::FlowDirection::Forward;
         updated_pin->current_rate = updating_pin->current_rate;
+        updated_pins[updated_pin] = updating_constraint;
         updating_pins.push({ updated_pin, updating_constraint });
     }
 
