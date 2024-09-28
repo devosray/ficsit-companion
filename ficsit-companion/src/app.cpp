@@ -505,6 +505,12 @@ void App::UpdateNodesRate()
         updated_pins[updating_pin] = updating_constraint;
         updated_count[updating_pin] += 1;
 
+        // If we are in some kind of infinite loop, skip this pin.
+        if (updated_count[updating_pin] > 8)
+        {
+            continue;
+        }
+
         // Update node from this pin
         switch (const Node::Kind kind = updating_pin->node->GetKind())
         {
