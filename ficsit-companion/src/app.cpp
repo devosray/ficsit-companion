@@ -428,7 +428,7 @@ void App::CreateLink(Pin* start, Pin* end)
             organizer_node->ChangeItem(start->item);
         }
     }
-    updating_pins.push({ start, Constraint::Strong });
+    updating_pins.push({ start, Constraint::Strong, nullptr });
 }
 
 void App::DeleteLink(const ax::NodeEditor::LinkId id)
@@ -500,7 +500,7 @@ void App::UpdateNodesRate()
 
     while (!updating_pins.empty())
     {
-        const auto [updating_pin, updating_constraint] = updating_pins.front();
+        const auto [updating_pin, updating_constraint, previous_node] = updating_pins.front();
         updating_pins.pop();
         updated_pins[updating_pin] = updating_constraint;
         updated_count[updating_pin] += 1;
@@ -517,6 +517,12 @@ void App::UpdateNodesRate()
         case Node::Kind::Craft:
         {
             CraftNode* node = static_cast<CraftNode*>(updating_pin->node);
+            // Do not update any pins of the current node if it is the same node we just came from.
+            if (previous_node == node) 
+            {
+                break;
+            }
+
             if (updating_pin->direction == ax::NodeEditor::PinKind::Output)
             {
                 node->current_rate = updating_pin->current_rate / (updating_pin->base_rate * (1 + node->num_somersloop * node->recipe->building->somersloop_mult));
@@ -544,7 +550,7 @@ void App::UpdateNodesRate()
                 // Don't need to push it if it's not linked to anything
                 if (p->link != nullptr)
                 {
-                    updating_pins.push({ p.get(), updating_constraint });
+                    updating_pins.push({ p.get(), updating_constraint, node });
                 }
             }
             for (auto& p : node->outs)
@@ -558,7 +564,7 @@ void App::UpdateNodesRate()
                 if (p->link != nullptr)
                 {
                     updated_pins[p.get()] = Constraint::Strong;
-                    updating_pins.push({ p.get(), Constraint::Strong });
+                    updating_pins.push({ p.get(), Constraint::Strong, node });
                 }
             }
             break;
@@ -567,6 +573,12 @@ void App::UpdateNodesRate()
         case Node::Kind::Merger:
         {
             Node* node = updating_pin->node;
+            // Do not update any pins of the current node if it is the same node we just came from.
+            if (previous_node == node)
+            {
+                break;
+            }
+
             std::vector<std::unique_ptr<Pin>>& one_pin = kind == Node::Kind::Splitter ? node->ins : node->outs;
             std::vector<std::unique_ptr<Pin>>& multi_pin = kind == Node::Kind::Splitter ? node->outs : node->ins;
             // One of the "multi pin" side has been updated
@@ -595,7 +607,8 @@ void App::UpdateNodesRate()
                         updated_pins[one_pin[0].get()] = new_constraint;
                         updating_pins.push({
                             one_pin[0].get(),
-                            new_constraint
+                            new_constraint,
+                            node
                         });
                     }
                 }
@@ -625,7 +638,8 @@ void App::UpdateNodesRate()
                             updated_pins[other_pin] = new_constraint;
                             updating_pins.push({
                                 other_pin,
-                                new_constraint
+                                new_constraint,
+                                node
                                 });
                         }
                     }
@@ -659,7 +673,8 @@ void App::UpdateNodesRate()
                             updated_pins[multi_pin[other_idx].get()] = new_constraint;
                             updating_pins.push({
                                 multi_pin[other_idx].get(),
-                                new_constraint
+                                new_constraint,
+                                node
                                 });
                         }
                     }
@@ -675,7 +690,7 @@ void App::UpdateNodesRate()
                         {
                             multi_pin[i]->current_rate = new_rate;
                             updated_pins[multi_pin[i].get()] = Constraint::Weak;
-                            updating_pins.push({ multi_pin[i].get(), Constraint::Weak });
+                            updating_pins.push({ multi_pin[i].get(), Constraint::Weak, node });
                         }
                     }
                 }
@@ -709,7 +724,7 @@ void App::UpdateNodesRate()
         updating_pin->link->flow = updating_pin->direction == ax::NodeEditor::PinKind::Input ? ax::NodeEditor::FlowDirection::Backward : ax::NodeEditor::FlowDirection::Forward;
         updated_pin->current_rate = updating_pin->current_rate;
         updated_pins[updated_pin] = updating_constraint;
-        updating_pins.push({ updated_pin, updating_constraint });
+        updating_pins.push({ updated_pin, updating_constraint, previous_node});
     }
 
     // Just in case we exited the loop prematurely
@@ -1469,7 +1484,7 @@ void App::RenderNodes()
                                 try
                                 {
                                     p->current_rate = FractionalNumber(p->current_rate.GetStringFloat());
-                                    updating_pins.push({ p.get(), Constraint::Strong });
+                                    updating_pins.push({ p.get(), Constraint::Strong, nullptr });
                                 }
                                 catch (const std::domain_error&)
                                 {
@@ -1530,7 +1545,7 @@ void App::RenderNodes()
                                 try
                                 {
                                     p->current_rate = FractionalNumber(p->current_rate.GetStringFloat());
-                                    updating_pins.push({ p.get(), Constraint::Strong });
+                                    updating_pins.push({ p.get(), Constraint::Strong, nullptr });
                                 }
                                 catch (const std::domain_error&)
                                 {
@@ -1593,12 +1608,12 @@ void App::RenderNodes()
                             for (auto& p : craft_node->ins)
                             {
                                 p->current_rate = p->base_rate * craft_node->current_rate;
-                                updating_pins.push({ p.get(), Constraint::Strong });
+                                updating_pins.push({ p.get(), Constraint::Strong, nullptr });
                             }
                             for (auto& p : craft_node->outs)
                             {
                                 p->current_rate = p->base_rate * craft_node->current_rate * (1 + (craft_node->num_somersloop * craft_node->recipe->building->somersloop_mult));
-                                updating_pins.push({ p.get(), Constraint::Strong });
+                                updating_pins.push({ p.get(), Constraint::Strong, nullptr });
                             }
                         }
                         catch (const std::domain_error&)
@@ -1646,7 +1661,7 @@ void App::RenderNodes()
                                 for (auto& p : craft_node->outs)
                                 {
                                     p->current_rate = p->base_rate * craft_node->current_rate * (1 + (craft_node->num_somersloop * craft_node->recipe->building->somersloop_mult));
-                                    updating_pins.push({ p.get(), Constraint::Strong });
+                                    updating_pins.push({ p.get(), Constraint::Strong, nullptr });
                                 }
                             }
                             catch (const std::domain_error&)
@@ -1998,7 +2013,7 @@ void App::AddNewNode()
                         CreateLink(new_node_pin, pins[pin_index].get());
                     }
                 }
-                updating_pins.push({ new_node_pin, Constraint::Strong });
+                updating_pins.push({ new_node_pin, Constraint::Strong, nullptr });
             }
             on_popup_close();
         }
